@@ -1,0 +1,269 @@
+---
+title: "ENCODE RNA-seq correlation"
+author: "Guillaume Devailly"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+    echo = TRUE,
+    root.dir = 'M:/encodeEnhancerProject/interactiveHM/Rmd/',
+    fig.width = 10
+)
+```
+
+## Function definition
+We need a few packages:
+```{r loadPackages, message=FALSE, warning=FALSE}
+library(dplyr)
+library(readr)
+library(cowplot) # load ggplot2
+```
+
+We define a function that take two url of ENCODE .tsv file of gene quantification of RNA-seq data from the same species, and return a scatterplot and a Pearson correaltion value.
+```{r functionDefinition}
+plotCorrelationOfEncodeTsvSimple <- function(file1url, file2url, label1, label2) {
+    file1 <- read_tsv(file1url,  col_types = "cc?????????????")
+    file2 <- read_tsv(file2url,  col_types = "cc?????????????")
+    
+    pairTable <- inner_join(
+        select(file1, gene_id, FPKM),
+        select(file2, gene_id, FPKM),
+        by = "gene_id"
+    ) %>% filter(grepl("ENS", gene_id, fixed = TRUE)) %>% # we keep only ensembl gene
+        filter(FPKM.x > 0 | FPKM.y > 0) # we remove genes undetected in both sample. This step does not seems to make much difference on the PCC.
+    
+    pcc_fpkm <- cor(pairTable$FPKM.x, pairTable$FPKM.y)
+
+    plot1 <- ggplot(pairTable, aes(x=log10(FPKM.x+1), y=log10(FPKM.y+1))) + geom_point(size=0.8) +
+        geom_smooth(method=lm) +
+        ggtitle(paste0("PCC: ", round(pcc_fpkm, digits = 4)))
+
+    ggdraw() + draw_plot(plot1, 0, 0, 1, 0.9) +
+        draw_label(
+            paste0(label1, " vs ", label2, "\n", nrow(pairTable) ," genes"),
+            y = 1, vjust = 1
+        )
+}
+```
+
+## Pearson correlation coeeficicent for mouse RNA-seq
+
+Erythrobalst (ENCFF507VSO) and neural tube (ENCFF507QBN) RNA-seq are poorly correalted with each other:
+```{r}
+plotCorrelationOfEncodeTsvSimple(
+    "https://www.encodeproject.org/files/ENCFF507VSO/@@download/ENCFF507VSO.tsv",
+    "https://www.encodeproject.org/files/ENCFF507QBN/@@download/ENCFF507QBN.tsv",
+    "erythroblast (ENCFF507VSO)",
+    "neural tube (ENCFF507QBN)"
+)
+```
+
+But neural tube repplicates (ENCSR337FYI) are highly correlated:
+```{r}
+plotCorrelationOfEncodeTsvSimple(
+    "https://www.encodeproject.org/files/ENCFF928FUL/@@download/ENCFF928FUL.tsv",
+    "https://www.encodeproject.org/files/ENCFF507QBN/@@download/ENCFF507QBN.tsv",
+    "neural tube (ENCFF928FUL)",
+    "neural tube (ENCFF507QBN)"
+)
+```
+
+Bladder (ENCFF774MTJ) and adrenal gland (ENCFF584IVW) RNA-seq show intermediate level of correlation:
+```{r}
+plotCorrelationOfEncodeTsvSimple(
+    "https://www.encodeproject.org/files/ENCFF774MTJ/@@download/ENCFF774MTJ.tsv",
+    "https://www.encodeproject.org/files/ENCFF584IVW/@@download/ENCFF584IVW.tsv",
+    "bladder (ENCFF774MTJ)",
+    "adrenal gland (ENCFF584IVW)"
+)
+```
+
+## Pearson correlation coeeficicent for human RNA-seq
+
+Neural progenitor cell (ENCFF672VVX) and kidney epithelial cell (ENCFF177SUW) have an high PCC despite a resonably disperse scatterplot.
+```{r}
+plotCorrelationOfEncodeTsvSimple(
+    "https://www.encodeproject.org/files/ENCFF672VVX/@@download/ENCFF672VVX.tsv",
+    "https://www.encodeproject.org/files/ENCFF177SUW/@@download/ENCFF177SUW.tsv",
+    "neural progenitor cell (ENCFF672VVX)",
+    "kidney epithelial cell (ENCFF177SUW)"
+)
+```
+
+Neural progenitor cell replicates have an high PCC.
+```{r}
+plotCorrelationOfEncodeTsvSimple(
+    "https://www.encodeproject.org/files/ENCFF672VVX/@@download/ENCFF672VVX.tsv",
+    "https://www.encodeproject.org/files/ENCFF663ARH/@@download/ENCFF663ARH.tsv",
+    "neural progenitor cell (ENCFF672VVX)",
+    "neural progenitor cell (ENCFF663ARH)"
+)
+```
+
+
+Kidney epithelial cell repplicates have an high PCC despite a resonably disperse scatterplot.
+```{r}
+plotCorrelationOfEncodeTsvSimple(
+    "https://www.encodeproject.org/files/ENCFF456RET/@@download/ENCFF456RET.tsv",
+    "https://www.encodeproject.org/files/ENCFF177SUW/@@download/ENCFF177SUW.tsv",
+    "kidney epithelial cell (ENCFF456RET)",
+    "kidney epithelial cell (ENCFF177SUW)"
+)
+```
+
+Lung vs liver:
+```{r}
+plotCorrelationOfEncodeTsvSimple(
+    "https://www.encodeproject.org/files/ENCFF649ECE/@@download/ENCFF649ECE.tsv",
+    "https://www.encodeproject.org/files/ENCFF233YIF/@@download/ENCFF233YIF.tsv",
+    "lung (ENCFF649ECE)",
+    "liver (ENCFF233YIF)"
+)
+```
+
+Lung vs lung:
+```{r}
+plotCorrelationOfEncodeTsvSimple(
+    "https://www.encodeproject.org/files/ENCFF649ECE/@@download/ENCFF649ECE.tsv",
+    "https://www.encodeproject.org/files/ENCFF573QQU/@@download/ENCFF573QQU.tsv",
+    "lung (ENCFF649ECE)",
+    "lung (ENCFF573QQU)"
+)
+```
+
+## New methods, mouse RNAseq
+Let's see if Spearman correlation, or two normalisation methods of the data, give more meaningfull resuslts:
+```{r}
+invnorm = function(x) { # 
+    res = rank(x)
+    res = qnorm(res/(length(res)+0.5))
+    return(res)
+}
+
+plotCorrelationOfEncodeTsv <- function(file1url, file2url, label1, label2) {
+    file1 <- read_tsv(file1url,  col_types = "cc?????????????")
+    file2 <- read_tsv(file2url,  col_types = "cc?????????????")
+    
+    pairTable <- inner_join(
+        select(file1, gene_id, FPKM),
+        select(file2, gene_id, FPKM),
+        by = "gene_id"
+    ) %>% filter(grepl("ENS", gene_id, fixed = TRUE)) %>%
+        filter(FPKM.x > 0 | FPKM.y > 0)
+    
+    pairTable <- mutate(
+        pairTable,
+        exp1 = 1/(FPKM.x + 1),
+        exp2 = 1/(FPKM.y + 1),
+        expb1 = invnorm(FPKM.x),
+        expb2 = invnorm(FPKM.y)
+    )
+    
+    pcc_fpkm <- cor(pairTable$FPKM.x, pairTable$FPKM.y)
+    scc_fpkm <- cor(pairTable$FPKM.x, pairTable$FPKM.y, method = "spearman")
+    pcc_exp <- cor(pairTable$exp1, pairTable$exp2)
+    scc_exp <- cor(pairTable$exp1, pairTable$exp2, method = "spearman")
+    pcc_expb <- cor(pairTable$expb1, pairTable$expb2)
+    scc_expb <- cor(pairTable$expb1, pairTable$expb2, method = "spearman")
+    
+    plot1 <- ggplot(pairTable, aes(x=log10(FPKM.x+1), y=log10(FPKM.y+1))) + geom_point(size=0.8) +
+        geom_smooth(method=lm) +
+        ggtitle(paste0("PCC: ", round(pcc_fpkm, digits = 4), "\nSCC: ", round(scc_fpkm, digits = 4)))
+    plot2 <- ggplot(pairTable, aes(x=exp1, y=exp2)) + geom_point(size=0.8) +
+        geom_smooth(method=lm) +
+        ggtitle(paste0("PCC: ", round(pcc_exp, digits = 4), "\nSCC: ", round(scc_exp, digits = 4)))
+    plot3 <- ggplot(pairTable, aes(x=expb1, y=expb2)) + geom_point(size=0.8) +
+        geom_smooth(method=lm) +
+        ggtitle(paste0("PCC: ", round(pcc_expb, digits = 4), "\nSCC: ", round(scc_expb, digits = 4)))
+
+    ggdraw() + draw_plot(plot1, 0, 0, 1/3, 0.9) + draw_plot(plot2, 1/3, 0, 1/3, 0.9) + draw_plot(plot3, 2/3, 0, 1/3, 0.9) +
+        draw_label(
+            paste0(label1, " vs ", label2, "\n", nrow(pairTable) ," genes"),
+            y = 1, vjust = 1
+        )
+}
+```
+
+Spearman and normaisation methods raises the correaltion value of unrelated sample.
+```{r}
+plotCorrelationOfEncodeTsv(
+    "https://www.encodeproject.org/files/ENCFF507VSO/@@download/ENCFF507VSO.tsv",
+    "https://www.encodeproject.org/files/ENCFF507QBN/@@download/ENCFF507QBN.tsv",
+    "erythroblast (ENCFF507VSO)",
+    "neural tube (ENCFF507QBN)"
+)
+```
+
+Neural tube repplicates (ENCSR337FYI) are still highly correlated:
+```{r}
+plotCorrelationOfEncodeTsv(
+    "https://www.encodeproject.org/files/ENCFF928FUL/@@download/ENCFF928FUL.tsv",
+    "https://www.encodeproject.org/files/ENCFF507QBN/@@download/ENCFF507QBN.tsv",
+    "neural tube (ENCFF928FUL)",
+    "neural tube (ENCFF507QBN)"
+)
+```
+
+Intermediate level of correlation become a bit high:
+```{r}
+plotCorrelationOfEncodeTsv(
+    "https://www.encodeproject.org/files/ENCFF774MTJ/@@download/ENCFF774MTJ.tsv",
+    "https://www.encodeproject.org/files/ENCFF584IVW/@@download/ENCFF584IVW.tsv",
+    "bladder (ENCFF774MTJ)",
+    "adrenal gland (ENCFF584IVW)"
+)
+```
+
+## Pearson correlation coeeficicent for human RNA-seq
+
+Spearman and new methods give a more meaningfull value:
+```{r}
+plotCorrelationOfEncodeTsv(
+    "https://www.encodeproject.org/files/ENCFF672VVX/@@download/ENCFF672VVX.tsv",
+    "https://www.encodeproject.org/files/ENCFF177SUW/@@download/ENCFF177SUW.tsv",
+    "neural progenitor cell (ENCFF672VVX)",
+    "kidney epithelial cell (ENCFF177SUW)"
+)
+```
+
+Neural progenitor cell replicates have an high PCC.
+```{r}
+plotCorrelationOfEncodeTsv(
+    "https://www.encodeproject.org/files/ENCFF672VVX/@@download/ENCFF672VVX.tsv",
+    "https://www.encodeproject.org/files/ENCFF663ARH/@@download/ENCFF663ARH.tsv",
+    "neural progenitor cell (ENCFF672VVX)",
+    "neural progenitor cell (ENCFF663ARH)"
+)
+```
+
+
+Kidney epithelial cell repplicates have an high PCC despite a resonably disperse scatterplot.
+```{r}
+plotCorrelationOfEncodeTsv(
+    "https://www.encodeproject.org/files/ENCFF456RET/@@download/ENCFF456RET.tsv",
+    "https://www.encodeproject.org/files/ENCFF177SUW/@@download/ENCFF177SUW.tsv",
+    "kidney epithelial cell (ENCFF456RET)",
+    "kidney epithelial cell (ENCFF177SUW)"
+)
+```
+
+Spearman and new methods give a more meaningfull value:
+```{r}
+plotCorrelationOfEncodeTsv(
+    "https://www.encodeproject.org/files/ENCFF649ECE/@@download/ENCFF649ECE.tsv",
+    "https://www.encodeproject.org/files/ENCFF233YIF/@@download/ENCFF233YIF.tsv",
+    "lung (ENCFF649ECE)",
+    "liver (ENCFF233YIF)"
+)
+```
+
+Lung vs lung:
+```{r}
+plotCorrelationOfEncodeTsv(
+    "https://www.encodeproject.org/files/ENCFF649ECE/@@download/ENCFF649ECE.tsv",
+    "https://www.encodeproject.org/files/ENCFF573QQU/@@download/ENCFF573QQU.tsv",
+    "lung (ENCFF649ECE)",
+    "lung (ENCFF573QQU)"
+)
+```
